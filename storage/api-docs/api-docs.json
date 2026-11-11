@@ -1,0 +1,478 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Clinic Appointment API",
+    "version": "1.0.0",
+    "description": "REST API для системы записи к врачу в клинику. Позволяет управлять специальностями, врачами и записями на приём. Поддерживает роли: пациент, врач, администратор."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000",
+      "description": "Локальный сервер разработки"
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Аутентификация и регистрация" },
+    { "name": "Doctors", "description": "Управление врачами" },
+    { "name": "Specialties", "description": "Управление специальностями" },
+    { "name": "Appointments", "description": "Управление записями на приём" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Введите токен Sanctum (без слова Bearer)"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Иван Петров" },
+          "email": { "type": "string", "example": "patient@example.com" },
+          "phone": { "type": "string", "nullable": true, "example": "+7 999 123-45-67" },
+          "role": { "type": "string", "enum": ["patient", "doctor", "admin"], "example": "patient" }
+        }
+      },
+      "Specialty": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Кардиолог" },
+          "description": { "type": "string", "nullable": true, "example": "Сердечно-сосудистые заболевания" }
+        }
+      },
+      "Doctor": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "user_id": { "type": "integer", "example": 2 },
+          "specialty_id": { "type": "integer", "example": 1 },
+          "experience_years": { "type": "integer", "nullable": true, "example": 12 },
+          "bio": { "type": "string", "nullable": true, "example": "Опытный кардиолог" },
+          "is_active": { "type": "boolean", "example": true },
+          "user": { "$ref": "#/components/schemas/User" },
+          "specialty": { "$ref": "#/components/schemas/Specialty" }
+        }
+      },
+      "Appointment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "patient_id": { "type": "integer", "example": 1 },
+          "doctor_id": { "type": "integer", "example": 1 },
+          "starts_at": { "type": "string", "format": "date-time", "example": "2026-12-01T10:00:00Z" },
+          "ends_at": { "type": "string", "format": "date-time", "example": "2026-12-01T10:30:00Z" },
+          "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled", "no_show"], "example": "pending" },
+          "comment": { "type": "string", "nullable": true, "example": "Болит сердце" },
+          "doctor": { "$ref": "#/components/schemas/Doctor" },
+          "patient": { "$ref": "#/components/schemas/User" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Регистрация нового пользователя",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password"],
+                "properties": {
+                  "name": { "type": "string", "example": "Иван Петров" },
+                  "email": { "type": "string", "format": "email", "example": "patient@example.com" },
+                  "password": { "type": "string", "minLength": 6, "example": "secret123" },
+                  "phone": { "type": "string", "nullable": true, "example": "+7 999 123-45-67" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Успешная регистрация",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string", "example": "Регистрация успешна" },
+                    "user": { "$ref": "#/components/schemas/User" },
+                    "token": { "type": "string", "example": "1|abcdefg..." }
+                  }
+                }
+              }
+            }
+          },
+          "422": { "description": "Ошибка валидации" }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Вход в систему",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "admin@example.com" },
+                  "password": { "type": "string", "example": "secret123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный вход",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string", "example": "Вход выполнен" },
+                    "user": { "$ref": "#/components/schemas/User" },
+                    "token": { "type": "string", "example": "2|abcdefg..." }
+                  }
+                }
+              }
+            }
+          },
+          "422": { "description": "Неверный email или пароль" }
+        }
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Выход из системы (удаление токена)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Успешный выход",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "message": { "type": "string", "example": "Вы вышли из системы" } } } } }
+          },
+          "401": { "description": "Неавторизован" }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Информация о текущем пользователе",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Текущий пользователь",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "401": { "description": "Неавторизован" }
+        }
+      }
+    },
+    "/api/doctors": {
+      "get": {
+        "tags": ["Doctors"],
+        "summary": "Список врачей с фильтрацией и сортировкой",
+        "parameters": [
+          { "name": "specialty_id", "in": "query", "schema": { "type": "integer" }, "description": "Фильтр по специальности" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Поиск по ФИО врача" },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["id", "name", "experience_years"], "default": "id" } },
+          { "name": "direction", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc"], "default": "asc" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список врачей",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Doctor" } },
+                    "meta": { "type": "object", "properties": { "current_page": { "type": "integer" }, "per_page": { "type": "integer" }, "total": { "type": "integer" } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Doctors"],
+        "summary": "Создать врача (только админ)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["user_id", "specialty_id"],
+                "properties": {
+                  "user_id": { "type": "integer", "example": 2 },
+                  "specialty_id": { "type": "integer", "example": 1 },
+                  "experience_years": { "type": "integer", "nullable": true, "example": 12 },
+                  "bio": { "type": "string", "nullable": true, "example": "Опытный кардиолог" },
+                  "is_active": { "type": "boolean", "example": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { 
+            "description": "Врач создан",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Doctor" } } }
+          },
+          "403": { "description": "Доступ запрещён" },
+          "422": { "description": "Ошибка валидации" }
+        }
+      }
+    },
+    "/api/doctors/{id}": {
+      "get": {
+        "tags": ["Doctors"],
+        "summary": "Информация о враче",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Данные врача", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Doctor" } } } },
+          "404": { "description": "Не найдено" }
+        }
+      },
+      "put": {
+        "tags": ["Doctors"],
+        "summary": "Обновить данные врача (только админ)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "specialty_id": { "type": "integer" },
+                  "experience_years": { "type": "integer", "nullable": true },
+                  "bio": { "type": "string", "nullable": true },
+                  "is_active": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Врач обновлён", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Doctor" } } } },
+          "403": { "description": "Доступ запрещён" },
+          "404": { "description": "Не найдено" }
+        }
+      },
+      "delete": {
+        "tags": ["Doctors"],
+        "summary": "Удалить врача (soft delete, только админ)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Врач удалён" },
+          "403": { "description": "Доступ запрещён" },
+          "404": { "description": "Не найдено" }
+        }
+      }
+    },
+    "/api/specialties": {
+      "get": {
+        "tags": ["Specialties"],
+        "summary": "Список специальностей",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } }],
+        "responses": {
+          "200": { 
+            "description": "Список специальностей",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Specialty" } },
+                    "meta": { "type": "object", "properties": { "current_page": { "type": "integer" }, "per_page": { "type": "integer" }, "total": { "type": "integer" } } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Неавторизован" }
+        }
+      },
+      "post": {
+        "tags": ["Specialties"],
+        "summary": "Создать специальность (только админ)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Невролог" },
+                  "description": { "type": "string", "nullable": true, "example": "Заболевания нервной системы" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { 
+            "description": "Специальность создана",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Specialty" } } }
+          },
+          "401": { "description": "Неавторизован" },
+          "403": { "description": "Доступ запрещён" },
+          "422": { "description": "Ошибка валидации" }
+        }
+      }
+    },
+    "/api/specialties/{id}": {
+      "get": {
+        "tags": ["Specialties"],
+        "summary": "Информация о специальности",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { 
+            "description": "Данные специальности",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Specialty" } } }
+          },
+          "401": { "description": "Неавторизован" },
+          "404": { "description": "Не найдено" }
+        }
+      },
+      "put": {
+        "tags": ["Specialties"],
+        "summary": "Обновить специальность (только админ)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string", "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { 
+            "description": "Специальность обновлена",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Specialty" } } }
+          },
+          "401": { "description": "Неавторизован" },
+          "403": { "description": "Доступ запрещён" },
+          "404": { "description": "Не найдено" }
+        }
+      },
+      "delete": {
+        "tags": ["Specialties"],
+        "summary": "Удалить специальность (только админ)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "Специальность удалена" },
+          "401": { "description": "Неавторизован" },
+          "403": { "description": "Доступ запрещён" },
+          "409": { "description": "Нельзя удалить — есть привязанные врачи" }
+        }
+      }
+    },
+    "/api/appointments": {
+      "get": {
+        "tags": ["Appointments"],
+        "summary": "Список записей (пациент — свои, врач — свои, админ — все)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled", "no_show"] } },
+          { "name": "date", "in": "query", "schema": { "type": "string", "format": "date", "example": "2026-12-01" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } }
+        ],
+        "responses": {
+          "200": { 
+            "description": "Список записей",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Appointment" } },
+                    "meta": { "type": "object", "properties": { "current_page": { "type": "integer" }, "per_page": { "type": "integer" }, "total": { "type": "integer" } } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Неавторизован" }
+        }
+      },
+      "post": {
+        "tags": ["Appointments"],
+        "summary": "Создать запись на приём",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["doctor_id", "starts_at", "ends_at"],
+                "properties": {
+                  "doctor_id": { "type": "integer", "example": 1 },
+                  "starts_at": { "type": "string", "format": "date-time", "example": "2026-12-01 10:00:00" },
+                  "ends_at": { "type": "string", "format": "date-time", "example": "2026-12-01 10:30:00" },
+                  "comment": { "type": "string", "nullable": true, "example": "Болит сердце" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { 
+            "description": "Запись создана",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Appointment" } } }
+          },
+          "401": { "description": "Неавторизован" },
+          "422": { "description": "Ошибка валидации (слот занят, время в прошлом)" }
+        }
+      }
+    },
+    "/api/appointments/{id}": {
+      "delete": {
+        "tags": ["Appointments"],
+        "summary": "Отменить запись (soft delete)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Запись отменена" },
+          "401": { "description": "Неавторизован" },
+          "403": { "description": "Нельзя отменить чужую запись" },
+          "404": { "description": "Не найдено" }
+        }
+      }
+    }
+  }
+}
