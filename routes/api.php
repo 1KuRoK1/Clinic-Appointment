@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\SpecialtyController;
 use Illuminate\Support\Facades\Route;
 
 // Публичные роуты (гость)
@@ -28,4 +29,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/doctors/{doctor}', [DoctorController::class, 'update']);
         Route::delete('/doctors/{doctor}', [DoctorController::class, 'destroy']);
     });
+});
+
+// Управление специальностями (только админ)
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::apiResource('specialties', SpecialtyController::class);
 });
